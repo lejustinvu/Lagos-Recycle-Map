@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lagos Recycling & Plastic Waste Vulnerability Map</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Fraunces:wght@700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --emerald: #059669;
+    --emerald-dark: #047857;
+    --emerald-light: #6ee7b7;
+    --teal: #0d9488;
+    --red-500: #ef4444;
+    --red-600: #dc2626;
+    --orange-500: #f97316;
+    --amber-500: #f59e0b;
+    --blue-500: #3b82f6;
+    --purple-500: #8b5cf6;
+    --slate-900: #0f172a;
+    --slate-700: #334155;
+    --slate-500: #64748b;
+    --slate-300: #cbd5e1;
+    --slate-100: #f1f5f9;
+    --white: #ffffff;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Plus Jakarta Sans', sans-serif; background: var(--white); color: var(--slate-900); height: 100vh; overflow: hidden; }
+
+  .app { display: grid; grid-template-columns: 400px 1fr; height: 100vh; }
+
+  /* SIDEBAR */
+  .sidebar {
+    background: var(--white);
+    border-right: 1px solid #e2e8f0;
+    display: flex; flex-direction: column; overflow: hidden;
+    box-shadow: 4px 0 24px rgba(0,0,0,0.04);
+    z-index: 1000;
+  }
+  .sidebar-header {
+    padding: 24px 22px 18px;
+    border-bottom: 1px solid #e2e8f0;
+    background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 50%, #f0f9ff 100%);
+  }
+  .logo-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+  .logo-icon {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: linear-gradient(135deg, var(--emerald), var(--teal));
+    display: flex; align-items: center; justify-content: center; font-size: 18px;
+    box-shadow: 0 2px 8px rgba(5, 150, 105, 0.25);
+  }
+  .logo-title {
+    font-family: 'Fraunces', serif; font-size: 18px; font-weight: 800;
+    color: var(--emerald-dark); letter-spacing: -0.02em;
+  }
+  .logo-sub { font-size: 11px; color: var(--slate-500); font-weight: 500; letter-spacing: 0.03em; }
+
+  /* STATS */
+  .stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; padding: 14px 22px; border-bottom: 1px solid #e2e8f0; }
+  .stat { background: var(--slate-100); border-radius: 10px; padding: 10px 12px; text-align: center; }
+  .stat-num { font-family: 'Fraunces', serif; font-size: 22px; font-weight: 800; color: var(--emerald-dark); line-height: 1; }
+  .stat-num.waste-num { color: var(--red-600); }
+  .stat-lbl { font-size: 9px; color: var(--slate-500); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; margin-top: 2px; }
+
+  /* LAYER TOGGLES */
+  .layers { padding: 12px 22px; border-bottom: 1px solid #e2e8f0; }
+  .layers-title { font-size: 10px; color: var(--slate-500); text-transform: uppercase; letter-spacing: 0.1em; font-weight: 700; margin-bottom: 8px; }
+  .layer-row { display: flex; align-items: center; justify-content: space-between; padding: 6px 0; }
+  .layer-left { display: flex; align-items: center; gap: 8px; }
+  .layer-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .layer-name { font-size: 12px; font-weight: 500; color: var(--slate-700); }
+  .toggle { width: 36px; height: 20px; border-radius: 10px; cursor: pointer; position: relative; transition: background 0.3s; background: #cbd5e1; }
+  .toggle.on { background: var(--emerald); }
+  .toggle::after { content: ''; position: absolute; width: 16px; height: 16px; background: white; border-radius: 50%; top: 2px; left: 2px; transition: transform 0.3s; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+  .toggle.on::after { transform: translateX(16px); }
+
+  /* FILTERS */
+  .filters { padding: 10px 22px; border-bottom: 1px solid #e2e8f0; }
+  .filter-pills { display: flex; gap: 5px; flex-wrap: wrap; }
+  .pill {
+    background: var(--white); border: 1.5px solid #e2e8f0; color: var(--slate-500);
+    padding: 5px 11px; border-radius: 20px; font-size: 11px; font-weight: 600;
+    cursor: pointer; transition: all 0.2s; font-family: 'Plus Jakarta Sans', sans-serif;
+  }
+  .pill:hover { border-color: var(--emerald); color: var(--emerald); }
+  .pill.active { background: var(--emerald); border-color: var(--emerald); color: white; }
+
+  /* LIST */
+  .list-wrap { flex: 1; overflow-y: auto; padding: 6px 10px; }
+  .list-wrap::-webkit-scrollbar { width: 4px; }
+  .list-wrap::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+  .card {
+    background: var(--white); border: 1px solid #f1f5f9; border-radius: 10px;
+    padding: 12px 14px; margin-bottom: 5px; cursor: pointer; transition: all 0.2s;
+    position: relative;
+  }
+  .card::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; border-radius: 3px 0 0 3px; opacity: 0; transition: opacity 0.2s; }
+  .card:hover { background: #f8fafc; border-color: #e2e8f0; transform: translateX(2px); }
+  .card:hover::before { opacity: 1; }
+  .card.type-plant::before { background: var(--emerald); }
+  .card.type-dropoff::before { background: var(--blue-500); }
+  .card.type-ewaste::before { background: var(--purple-500); }
+  .card.type-collection::before { background: var(--amber-500); }
+  .card.type-mrf::before { background: var(--teal); }
+  .card.hl { background: #f0fdf4; border-color: #a7f3d0; }
+  .card.hl::before { opacity: 1; }
+
+  .card-name { font-size: 12.5px; font-weight: 700; color: var(--slate-900); margin-bottom: 3px; line-height: 1.3; }
+  .card-addr { font-size: 10.5px; color: var(--slate-500); line-height: 1.35; margin-bottom: 5px; }
+  .card-meta { display: flex; align-items: center; gap: 8px; }
+  .badge {
+    font-size: 9px; padding: 2px 8px; border-radius: 10px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .badge-plant { background: #d1fae5; color: #065f46; }
+  .badge-dropoff { background: #dbeafe; color: #1e40af; }
+  .badge-ewaste { background: #ede9fe; color: #5b21b6; }
+  .badge-collection { background: #fef3c7; color: #92400e; }
+  .badge-mrf { background: #ccfbf1; color: #115e59; }
+  .card-rating { font-size: 10.5px; color: var(--slate-500); }
+  .card-rating .star { color: #f59e0b; }
+  .card-district { font-size: 9px; color: var(--slate-500); font-weight: 500; margin-left: auto; }
+
+  /* MAP */
+  #map { width: 100%; height: 100%; }
+  .map-wrap { position: relative; }
+
+  /* MAP OVERLAYS */
+  .map-title-overlay {
+    position: absolute; top: 16px; right: 16px; z-index: 800;
+    background: rgba(255,255,255,0.92); backdrop-filter: blur(10px);
+    border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px 18px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.06); pointer-events: none;
+  }
+  .map-title-overlay h2 { font-family: 'Fraunces', serif; font-size: 14px; font-weight: 800; color: var(--emerald-dark); }
+  .map-title-overlay p { font-size: 10.5px; color: var(--slate-500); }
+
+  .legend-box {
+    position: absolute; bottom: 30px; right: 16px; z-index: 800;
+    background: rgba(255,255,255,0.95); backdrop-filter: blur(10px);
+    border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 18px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.06); min-width: 200px;
+  }
+  .leg-title { font-size: 9px; color: var(--slate-500); text-transform: uppercase; letter-spacing: 0.1em; font-weight: 700; margin-bottom: 8px; }
+  .leg-item { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; font-size: 11px; color: var(--slate-700); font-weight: 500; }
+  .leg-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; border: 1.5px solid rgba(0,0,0,0.1); }
+  .leg-section { margin-top: 10px; }
+  .leg-gradient { width: 100%; height: 10px; border-radius: 5px; margin-top: 4px; }
+  .leg-gradient.recycling { background: linear-gradient(90deg, #d1fae5, #059669, #047857); }
+  .leg-gradient.waste { background: linear-gradient(90deg, #fef3c7, #f97316, #dc2626); }
+  .leg-grad-labels { display: flex; justify-content: space-between; font-size: 9px; color: var(--slate-500); margin-top: 2px; }
+
+  /* DISTRICT LABEL */
+  .district-label {
+    font-family: 'Plus Jakarta Sans', sans-serif; font-size: 11px; font-weight: 700;
+    color: rgba(15, 23, 42, 0.4); text-transform: uppercase; letter-spacing: 0.08em;
+    text-shadow: 1px 1px 2px rgba(255,255,255,0.8);
+    white-space: nowrap;
+  }
+
+  /* POPUP */
+  .custom-popup .leaflet-popup-content-wrapper {
+    background: rgba(255,255,255,0.97); backdrop-filter: blur(10px);
+    border: 1px solid #e2e8f0; border-radius: 12px; color: var(--slate-900);
+    box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+  }
+  .custom-popup .leaflet-popup-tip { background: rgba(255,255,255,0.97); border: 1px solid #e2e8f0; }
+  .custom-popup .leaflet-popup-content { margin: 12px 16px; }
+  .popup-name { font-weight: 800; font-size: 13px; color: var(--emerald-dark); margin-bottom: 4px; }
+  .popup-addr { font-size: 11px; color: var(--slate-500); margin-bottom: 6px; line-height: 1.35; }
+  .popup-badge { font-size: 9px; padding: 2px 10px; border-radius: 10px; display: inline-block; margin-bottom: 5px; font-weight: 700; }
+  .popup-info { font-size: 11px; color: var(--slate-700); margin-top: 2px; }
+  .popup-rating { font-size: 12px; color: #f59e0b; margin-top: 4px; font-weight: 600; }
+
+  .leaflet-control-zoom { border: none !important; box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important; }
+  .leaflet-control-zoom a { background: white !important; color: var(--slate-700) !important; border: 1px solid #e2e8f0 !important; }
+  .leaflet-control-zoom a:hover { background: #f8fafc !important; }
+
+  @media (max-width: 900px) {
+    .app { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+    .sidebar { max-height: 45vh; border-right: none; border-bottom: 1px solid #e2e8f0; }
+  }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  .card { animation: fadeUp 0.35s ease forwards; }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="logo-row">
+        <div class="logo-icon">♻️</div>
+        <div class="logo-title">Lagos Recycle Map</div>
+      </div>
+      <div class="logo-sub">Recycling Infrastructure & Plastic Waste Vulnerability</div>
+    </div>
+
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-num" id="totalCount">33</div>
+        <div class="stat-lbl">Recycling Sites</div>
+      </div>
+      <div class="stat">
+        <div class="stat-num waste-num">870K</div>
+        <div class="stat-lbl">Tonnes/Year</div>
+      </div>
+      <div class="stat">
+        <div class="stat-num waste-num">~4%</div>
+        <div class="stat-lbl">Recycled</div>
+      </div>
+    </div>
+
+    <div class="layers">
+      <div class="layers-title">Map Layers</div>
+      <div class="layer-row">
+        <div class="layer-left"><div class="layer-dot" style="background:var(--emerald)"></div><span class="layer-name">Recycling Facility Heat Map</span></div>
+        <div class="toggle on" id="toggleRecycleHeat"></div>
+      </div>
+      <div class="layer-row">
+        <div class="layer-left"><div class="layer-dot" style="background:var(--red-500)"></div><span class="layer-name">Plastic Waste Accumulation</span></div>
+        <div class="toggle on" id="toggleWasteHeat"></div>
+      </div>
+      <div class="layer-row">
+        <div class="layer-left"><div class="layer-dot" style="background:var(--slate-300)"></div><span class="layer-name">LGA District Boundaries</span></div>
+        <div class="toggle on" id="toggleDistricts"></div>
+      </div>
+    </div>
+
+    <div class="filters">
+      <div class="filter-pills">
+        <button class="pill active" data-filter="all">All</button>
+        <button class="pill" data-filter="plant">Recycling Plant</button>
+        <button class="pill" data-filter="dropoff">Drop-off</button>
+        <button class="pill" data-filter="ewaste">E-Waste</button>
+        <button class="pill" data-filter="collection">Collection Hub</button>
+        <button class="pill" data-filter="mrf">MRF</button>
+      </div>
+    </div>
+
+    <div class="list-wrap" id="list"></div>
+  </aside>
+
+  <div class="map-wrap">
+    <div id="map"></div>
+    <div class="map-title-overlay">
+      <h2>Lagos State, Nigeria</h2>
+      <p>20 LGAs &bull; Recycling sites &amp; plastic waste hotspots</p>
+    </div>
+    <div class="legend-box">
+      <div class="leg-title">Facility Types</div>
+      <div class="leg-item"><div class="leg-dot" style="background:#059669"></div> Recycling Plant</div>
+      <div class="leg-item"><div class="leg-dot" style="background:#3b82f6"></div> Drop-off Point</div>
+      <div class="leg-item"><div class="leg-dot" style="background:#8b5cf6"></div> E-Waste Facility</div>
+      <div class="leg-item"><div class="leg-dot" style="background:#f59e0b"></div> Collection Hub</div>
+      <div class="leg-item"><div class="leg-dot" style="background:#0d9488"></div> Material Recovery Facility</div>
+      <div class="leg-section">
+        <div class="leg-title">Recycling Density</div>
+        <div class="leg-gradient recycling"></div>
+        <div class="leg-grad-labels"><span>Sparse</span><span>Dense</span></div>
+      </div>
+      <div class="leg-section">
+        <div class="leg-title">Plastic Waste Accumulation</div>
+        <div class="leg-gradient waste"></div>
+        <div class="leg-grad-labels"><span>Low</span><span>Critical</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
+<script>
+// ─── DATA ───
+const locations = [
+  // RECYCLING PLANTS
+  { name:"Wecyclers HQ", addr:"Odaliki St, Ebute Metta", lat:6.4837, lng:3.3778, type:"plant", rating:4.1, hours:"Mon-Fri 8AM-5PM", cat:"Plastics, Paper, Metals", district:"Lagos Mainland" },
+  { name:"Green Recycling Industries", addr:"Plot 51B Obikings St, Amuwo Odofin", lat:6.4762, lng:3.3236, type:"plant", rating:4.3, hours:"Mon-Sat 8AM-5PM", cat:"Batteries, PET, Metals", district:"Amuwo-Odofin" },
+  { name:"Greenhill Recycling", addr:"No 6 PFN Close, Oshodi-Isolo", lat:6.5274, lng:3.3073, type:"plant", rating:3.6, hours:"Mon-Fri 8AM-5PM", cat:"Plastics, Recyclables", district:"Oshodi-Isolo" },
+  { name:"Richbol Environmental Services", addr:"10 Bisi Olatunji St, Ojodu Berger", lat:6.6531, lng:3.3702, type:"plant", rating:4.8, hours:"Mon-Sat 8AM-6PM", cat:"PET Bottles → Pellets", district:"Ifako-Ijaiye" },
+  { name:"LAWMA Recycle Depot", addr:"Ibadan Street, Ebute Metta", lat:6.4834, lng:3.3778, type:"plant", rating:5.0, hours:"Contact for hours", cat:"Government Depot", district:"Lagos Mainland" },
+  { name:"Anie Recycle Resources", addr:"Road 5, Royal Estate, Alaka", lat:6.4878, lng:3.3562, type:"plant", rating:5.0, hours:"Open 24h", cat:"General Recycling", district:"Surulere" },
+  { name:"Nikeron Recycling & Waste", addr:"Immam Dauda St, Iganmu", lat:6.4850, lng:3.3530, type:"plant", rating:5.0, hours:"Open 24h", cat:"Waste Recycling", district:"Apapa" },
+  { name:"Recycling Experts Ltd", addr:"Commercial Rd, Apapa", lat:6.4377, lng:3.3686, type:"plant", rating:null, hours:"Mon-Sat 24h", cat:"Industrial Recycling", district:"Apapa" },
+  { name:"Nylon Recycling Centre", addr:"Williams St, Gbagada", lat:6.5547, lng:3.3939, type:"plant", rating:null, hours:"Operating hours vary", cat:"Nylon/Plastic Recycling", district:"Kosofe" },
+  { name:"Retreasure Global Solutions", addr:"CYEI Bldg, CBD Alausa / TIC Agege", lat:6.6276, lng:3.3265, type:"plant", rating:4.7, hours:"Mon-Fri 8AM-5PM", cat:"Biogas, Upcycling, Training", district:"Agege" },
+
+  // COLLECTION HUBS
+  { name:"RecyclePoints HQ", addr:"102 Lagos St, Adekunle", lat:6.4892, lng:3.3866, type:"collection", rating:4.1, hours:"Mon-Fri 8AM-5PM", cat:"Plastics, Metals, Paper", district:"Lagos Mainland" },
+  { name:"RecyclePoints — Alimosho", addr:"46 Ija Rd, Onilu Village", lat:6.5494, lng:3.2124, type:"collection", rating:4.0, hours:"Mon-Fri 8:30AM-5PM", cat:"Post-consumer Plastics", district:"Alimosho" },
+  { name:"Pakam", addr:"347 Ikorodu Rd, Maryland", lat:6.5749, lng:3.3698, type:"collection", rating:4.3, hours:"Mon-Fri 9AM-5PM", cat:"App-based Pickup Service", district:"Kosofe" },
+  { name:"Street Waste Company", addr:"159 Igbosere Rd, Lagos Island", lat:6.4497, lng:3.4031, type:"collection", rating:4.4, hours:"Mon-Fri 9AM-5PM", cat:"Plastics, Sustainability", district:"Lagos Island" },
+  { name:"Agoa Waste Management", addr:"124A Ojuelegba Rd, Idi Oro", lat:6.5106, lng:3.3611, type:"collection", rating:5.0, hours:"Mon-Fri 8AM-5PM", cat:"Professional Waste Mgmt", district:"Surulere" },
+  { name:"Statewide Waste & Enviro", addr:"30 Onibu Ore St, Surulere", lat:6.5045, lng:3.3416, type:"collection", rating:5.0, hours:"Mon-Fri", cat:"Environmental Education", district:"Surulere" },
+  { name:"Wecyclers — Lagos Island", addr:"149 Bamgbose St, Lagos Island", lat:6.4522, lng:3.3965, type:"collection", rating:4.3, hours:"Mon-Fri 9AM-5PM", cat:"Plastics, Cans, Paper", district:"Lagos Island" },
+  { name:"Wecyclers — Gbagada", addr:"Ifelodun Street, Gbagada", lat:6.5508, lng:3.3911, type:"collection", rating:4.7, hours:"Mon-Fri 9AM-5PM", cat:"Plastics, Paper, Metals", district:"Kosofe" },
+  { name:"V-Martins Recycling", addr:"6 Bola Kazeem Ave, Owode Onirin", lat:6.6047, lng:3.4107, type:"collection", rating:5.0, hours:"Mon-Sun 9AM-5PM", cat:"Scrap Metals, Recyclables", district:"Kosofe" },
+  { name:"ABIODUN Global Resources", addr:"16 Alh. Muili St, Oregun, Ikeja", lat:6.5991, lng:3.3638, type:"collection", rating:5.0, hours:"Mon-Sat 24h", cat:"Waste Collection & Recycling", district:"Ikeja" },
+  { name:"Junk Exchange (Junk 'n' Cash)", addr:"Idimu-Isheri Rd, Alimosho", lat:6.5793, lng:3.2852, type:"collection", rating:4.3, hours:"Mon-Sun", cat:"Cash for Recyclables", district:"Alimosho" },
+  { name:"Trash2wealth", addr:"22 Folorunsho St, Akoka", lat:6.5320, lng:3.3897, type:"collection", rating:null, hours:"Mon-Fri 9AM-5PM", cat:"Waste to Value", district:"Somolu" },
+  { name:"GIVO Center", addr:"23 Sunmola St, Mende, Maryland", lat:6.5687, lng:3.3694, type:"collection", rating:null, hours:"Mon-Sat 9AM-5PM", cat:"Collection & Sorting", district:"Kosofe" },
+
+  // DROP-OFF POINTS
+  { name:"Wecyclers — Obalende", addr:"44 Obalende Rd, Ikoyi", lat:6.4497, lng:3.4118, type:"dropoff", rating:4.0, hours:"Mon-Fri 9AM-5PM", cat:"Recyclables", district:"Eti-Osa" },
+  { name:"Wecyclers — Sabo, Ikorodu", addr:"Ikorodu-Epe Rd, Sabo", lat:6.6287, lng:3.5107, type:"dropoff", rating:null, hours:"Mon-Fri 9AM-5PM", cat:"Recyclables", district:"Ikorodu" },
+  { name:"Trashusers Hub — YABATECH", addr:"YABATECH Campus, Yaba", lat:6.5185, lng:3.3761, type:"dropoff", rating:5.0, hours:"Mon-Fri 9AM-5PM", cat:"General Recyclables", district:"Lagos Mainland" },
+  { name:"Recycle Point Ikeja", addr:"9 Talabi St, Ogba", lat:6.6225, lng:3.3467, type:"dropoff", rating:4.0, hours:"Hours vary", cat:"Recyclables", district:"Ifako-Ijaiye" },
+  { name:"RESWAYE — Owode, Lekki", addr:"5 Bankole Komolafe Cl, Addo", lat:6.5014, lng:3.5815, type:"dropoff", rating:5.0, hours:"Mon-Sat 8AM-5PM", cat:"PET Bottles, Cans", district:"Eti-Osa" },
+  { name:"RESWAYE — Elegushi Beach", addr:"Kids Beach Garden, Elegushi", lat:6.4231, lng:3.4836, type:"dropoff", rating:5.0, hours:"Mon-Sat 8AM-5PM", cat:"PET Bottles, Cans", district:"Eti-Osa" },
+  { name:"RESWAYE — Badore", addr:"Badore Rd, Eti-Osa", lat:6.5119, lng:3.6145, type:"dropoff", rating:5.0, hours:"Daily 8AM-5PM", cat:"PET Bottles, Cans", district:"Eti-Osa" },
+  { name:"RECYCLE Drop-Off — Lekki Ph1", addr:"10 Baderinwa Alabi St", lat:6.4328, lng:3.4711, type:"dropoff", rating:null, hours:"Mon-Fri 6AM-9PM", cat:"General Recyclables", district:"Eti-Osa" },
+  { name:"Tangerine Recycling Bin — Ajah", addr:"Cooperative Villa, Badore Rd", lat:6.5056, lng:3.6128, type:"dropoff", rating:4.0, hours:"Open access", cat:"PET, Cans", district:"Eti-Osa" },
+
+  // E-WASTE
+  { name:"E-Terra Technologies", addr:"65B Femi Ayantuga Cres, Surulere", lat:6.4953, lng:3.3511, type:"ewaste", rating:5.0, hours:"Mon-Fri 9AM-5PM", cat:"E-Waste, Data Destruction", district:"Surulere" },
+  { name:"Hinckley E-Waste Recycling", addr:"15 Sadiku Elemoro St, Gbogije-Ibeju", lat:6.4720, lng:3.7564, type:"ewaste", rating:4.9, hours:"Mon-Fri 8AM-5PM", cat:"Electronics Recycling", district:"Ibeju-Lekki" },
+
+  // MRF
+  { name:"Solous Material Recovery Facility", addr:"Isheri Rd, Ikotun, Alimosho", lat:6.5711, lng:3.2533, type:"mrf", rating:4.1, hours:"Open 24h", cat:"Waste Sorting → Raw Materials", district:"Alimosho" },
+  { name:"Bolamus Global Resources", addr:"8 Fashola St, Egbeda", lat:6.5974, lng:3.2808, type:"mrf", rating:null, hours:"Mon-Sat 24h", cat:"Material Recovery", district:"Alimosho" },
+];
+
+const typeColors = { plant:'#059669', dropoff:'#3b82f6', ewaste:'#8b5cf6', collection:'#f59e0b', mrf:'#0d9488' };
+const typeLabels = { plant:'Recycling Plant', dropoff:'Drop-off Point', ewaste:'E-Waste', collection:'Collection Hub', mrf:'MRF' };
+const badgeClass = { plant:'badge-plant', dropoff:'badge-dropoff', ewaste:'badge-ewaste', collection:'badge-collection', mrf:'badge-mrf' };
+
+// Lagos LGA approximate boundary centroids and polygons (simplified)
+const lgaData = [
+  { name:"Agege", lat:6.6195, lng:3.3275, pop:1109504, wasteIntensity:0.75 },
+  { name:"Ajeromi-Ifelodun", lat:6.4560, lng:3.3340, pop:1435295, wasteIntensity:0.92 },
+  { name:"Alimosho", lat:6.5960, lng:3.2580, pop:2047026, wasteIntensity:0.85 },
+  { name:"Amuwo-Odofin", lat:6.4650, lng:3.3120, pop:524971, wasteIntensity:0.55 },
+  { name:"Apapa", lat:6.4480, lng:3.3620, pop:523392, wasteIntensity:0.70 },
+  { name:"Badagry", lat:6.4180, lng:2.8850, pop:380400, wasteIntensity:0.30 },
+  { name:"Epe", lat:6.5840, lng:3.9800, pop:323634, wasteIntensity:0.20 },
+  { name:"Eti-Osa", lat:6.4580, lng:3.4700, pop:983515, wasteIntensity:0.60 },
+  { name:"Ibeju-Lekki", lat:6.4500, lng:3.7500, pop:117793, wasteIntensity:0.25 },
+  { name:"Ifako-Ijaiye", lat:6.6600, lng:3.3100, pop:744307, wasteIntensity:0.70 },
+  { name:"Ikeja", lat:6.5950, lng:3.3480, pop:648720, wasteIntensity:0.65 },
+  { name:"Ikorodu", lat:6.6200, lng:3.5050, pop:688396, wasteIntensity:0.55 },
+  { name:"Kosofe", lat:6.5700, lng:3.4000, pop:682135, wasteIntensity:0.72 },
+  { name:"Lagos Island", lat:6.4540, lng:3.3950, pop:859849, wasteIntensity:0.88 },
+  { name:"Lagos Mainland", lat:6.5020, lng:3.3750, pop:629469, wasteIntensity:0.80 },
+  { name:"Mushin", lat:6.5300, lng:3.3550, pop:1321517, wasteIntensity:0.95 },
+  { name:"Ojo", lat:6.4700, lng:3.2100, pop:941523, wasteIntensity:0.65 },
+  { name:"Oshodi-Isolo", lat:6.5450, lng:3.3150, pop:1134548, wasteIntensity:0.82 },
+  { name:"Somolu", lat:6.5400, lng:3.3850, pop:738700, wasteIntensity:0.78 },
+  { name:"Surulere", lat:6.5000, lng:3.3500, pop:1274362, wasteIntensity:0.85 },
+];
+
+// Plastic waste accumulation hotspots (based on research: markets, waterways, high-density areas)
+const wasteHotspots = [
+  // Major markets & high-density commercial areas
+  { lat:6.5106, lng:3.3611, intensity:1.0, label:"Ojuelegba Junction" },
+  { lat:6.4424, lng:3.3975, intensity:0.95, label:"Balogun Market, Lagos Island" },
+  { lat:6.5330, lng:3.3520, intensity:0.90, label:"Mushin Market Area" },
+  { lat:6.5130, lng:3.3220, intensity:0.88, label:"Mile 2 Junction" },
+  { lat:6.4550, lng:3.3350, intensity:0.92, label:"Ajegunle waterfront" },
+  { lat:6.4480, lng:3.3920, intensity:0.85, label:"Idumota/Marina" },
+  { lat:6.5950, lng:3.3450, intensity:0.80, label:"Ikeja/Computer Village" },
+  { lat:6.4920, lng:3.3880, intensity:0.82, label:"Yaba Market" },
+  { lat:6.5560, lng:3.3870, intensity:0.75, label:"Gbagada" },
+  { lat:6.4380, lng:3.3530, intensity:0.70, label:"Apapa Wharf" },
+  // Canal/drainage waste accumulation
+  { lat:6.4640, lng:3.3730, intensity:0.90, label:"Makoko Waterfront" },
+  { lat:6.4970, lng:3.3860, intensity:0.78, label:"Adekunle Canal" },
+  { lat:6.5200, lng:3.3380, intensity:0.82, label:"Idi-Araba drainage" },
+  { lat:6.5450, lng:3.3520, intensity:0.77, label:"Mushin-Oshodi corridor" },
+  { lat:6.5780, lng:3.2620, intensity:0.75, label:"Igando-Ikotun area" },
+  // Dumpsite areas
+  { lat:6.5920, lng:3.3680, intensity:0.98, label:"Olusosun Dumpsite (Ojota)" },
+  { lat:6.4560, lng:3.3200, intensity:0.85, label:"Olushosun Satellite (Amuwo)" },
+  { lat:6.6100, lng:3.5000, intensity:0.65, label:"Ikorodu Transfer Station" },
+  // High-population-density residential waste
+  { lat:6.5410, lng:3.3870, intensity:0.70, label:"Somolu residential" },
+  { lat:6.5200, lng:3.3760, intensity:0.72, label:"Yaba/Ebute Metta" },
+  { lat:6.6000, lng:3.2900, intensity:0.68, label:"Egbeda residential" },
+  { lat:6.4600, lng:3.4100, intensity:0.60, label:"Obalende" },
+  { lat:6.6600, lng:3.3500, intensity:0.62, label:"Ifako-Ijaiye" },
+  { lat:6.4700, lng:3.2500, intensity:0.55, label:"Ojo" },
+  // Beach/coastal waste
+  { lat:6.4100, lng:3.4800, intensity:0.58, label:"Elegushi Beach" },
+  { lat:6.4200, lng:3.5200, intensity:0.52, label:"Lekki coast" },
+  { lat:6.4050, lng:3.4200, intensity:0.45, label:"Bar Beach / VI coast" },
+];
+
+// ─── MAP INIT ───
+const map = L.map('map', { zoomControl: true }).setView([6.52, 3.40], 11);
+
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+  attribution: '&copy; <a href="https://openstreetmap.org">OSM</a> &copy; <a href="https://carto.com">CARTO</a>',
+  maxZoom: 19
+}).addTo(map);
+
+// ─── LGA DISTRICT BOUNDARIES (circle approximation) ───
+const districtLayer = L.layerGroup();
+lgaData.forEach(d => {
+  // Colored circle representing district area + waste intensity
+  const radius = Math.sqrt(d.pop) * 3.2;
+  const wasteColor = `rgba(${Math.round(220 * d.wasteIntensity)}, ${Math.round(80 * (1-d.wasteIntensity))}, ${Math.round(40 * d.wasteIntensity)}, 0.08)`;
+  const borderColor = `rgba(100, 116, 139, 0.25)`;
+
+  L.circle([d.lat, d.lng], {
+    radius: radius,
+    color: borderColor,
+    weight: 1.5,
+    dashArray: '6 4',
+    fillColor: wasteColor,
+    fillOpacity: 1,
+    interactive: false
+  }).addTo(districtLayer);
+
+  // District label
+  const label = L.divIcon({
+    className: 'district-label',
+    html: d.name,
+    iconSize: [0, 0],
+    iconAnchor: [0, 0]
+  });
+  L.marker([d.lat, d.lng], { icon: label, interactive: false }).addTo(districtLayer);
+});
+districtLayer.addTo(map);
+
+// ─── RECYCLING HEAT MAP ───
+const recycleHeatData = locations.map(l => [l.lat, l.lng, 0.8]);
+let recycleHeatLayer = L.heatLayer(recycleHeatData, {
+  radius: 30, blur: 25, maxZoom: 14, max: 1.0,
+  gradient: { 0.1:'rgba(209,250,229,0.3)', 0.3:'#6ee7b7', 0.5:'#34d399', 0.7:'#059669', 1.0:'#047857' }
+}).addTo(map);
+
+// ─── WASTE ACCUMULATION HEAT MAP ───
+const wasteHeatData = wasteHotspots.map(w => [w.lat, w.lng, w.intensity]);
+let wasteHeatLayer = L.heatLayer(wasteHeatData, {
+  radius: 32, blur: 28, maxZoom: 14, max: 1.0,
+  gradient: { 0.1:'rgba(254,243,199,0.2)', 0.3:'#fcd34d', 0.5:'#f97316', 0.7:'#ef4444', 1.0:'#991b1b' }
+}).addTo(map);
+
+// ─── MARKERS ───
+const markers = {};
+const markerLayer = L.layerGroup().addTo(map);
+
+function mkIcon(type) {
+  const c = typeColors[type];
+  return L.divIcon({
+    className: '',
+    html: `<div style="width:13px;height:13px;background:${c};border:2.5px solid #fff;border-radius:50%;box-shadow:0 2px 6px ${c}88,0 0 0 1px rgba(0,0,0,0.08);"></div>`,
+    iconSize: [13,13], iconAnchor: [6.5,6.5], popupAnchor: [0,-8]
+  });
+}
+
+locations.forEach((l,i) => {
+  const m = L.marker([l.lat, l.lng], { icon: mkIcon(l.type) });
+  const rHtml = l.rating ? `<div class="popup-rating">★ ${l.rating}/5</div>` : '';
+  const bStyle = `background:${typeColors[l.type]}22;color:${typeColors[l.type]};`;
+  m.bindPopup(`
+    <div class="popup-name">${l.name}</div>
+    <div class="popup-addr">${l.addr}</div>
+    <div class="popup-badge" style="${bStyle}">${typeLabels[l.type]}</div>
+    <div class="popup-info">🕐 ${l.hours}</div>
+    <div class="popup-info">📦 ${l.cat}</div>
+    <div class="popup-info">📍 ${l.district} LGA</div>
+    ${rHtml}
+  `, { className:'custom-popup', maxWidth:280 });
+  m.locType = l.type;
+  markerLayer.addLayer(m);
+  markers[i] = m;
+});
+
+// ─── WASTE HOTSPOT MARKERS (small red pulsing dots) ───
+const wasteMarkerLayer = L.layerGroup().addTo(map);
+wasteHotspots.forEach(w => {
+  if(w.intensity >= 0.75) {
+    const icon = L.divIcon({
+      className: '',
+      html: `<div style="width:8px;height:8px;background:rgba(220,38,38,0.5);border:1.5px solid rgba(220,38,38,0.7);border-radius:50;"></div>`,
+      iconSize:[8,8], iconAnchor:[4,4]
+    });
+    const m = L.marker([w.lat, w.lng], { icon, interactive: true });
+    m.bindPopup(`<div style="font-family:'Plus Jakarta Sans';"><strong style="color:#dc2626;">${w.label}</strong><br><span style="font-size:11px;color:#64748b;">Plastic waste intensity: <b style="color:#dc2626;">${Math.round(w.intensity*100)}%</b></span></div>`, { className:'custom-popup', maxWidth: 220 });
+    wasteMarkerLayer.addLayer(m);
+  }
+});
+
+// ─── SIDEBAR LIST ───
+function renderList(filter='all') {
+  const el = document.getElementById('list');
+  el.innerHTML = '';
+  let n = 0;
+  locations.forEach((l,i) => {
+    if(filter!=='all' && l.type !== filter) return;
+    n++;
+    const c = document.createElement('div');
+    c.className = `card type-${l.type}`;
+    c.style.animationDelay = `${n*0.03}s`;
+    const rH = l.rating ? `<span class="card-rating"><span class="star">★</span> ${l.rating}</span>` : '';
+    c.innerHTML = `
+      <div class="card-name">${l.name}</div>
+      <div class="card-addr">${l.addr}</div>
+      <div class="card-meta">
+        <span class="badge ${badgeClass[l.type]}">${typeLabels[l.type]}</span>
+        ${rH}
+        <span class="card-district">${l.district}</span>
+      </div>`;
+    c.onclick = () => {
+      map.flyTo([l.lat, l.lng], 15, { duration: 0.7 });
+      markers[i].openPopup();
+      document.querySelectorAll('.card').forEach(x=>x.classList.remove('hl'));
+      c.classList.add('hl');
+    };
+    c.onmouseenter = () => markers[i].openPopup();
+    el.appendChild(c);
+  });
+  document.getElementById('totalCount').textContent = n;
+}
+
+// ─── FILTER PILLS ───
+document.querySelectorAll('.pill').forEach(p => {
+  p.onclick = () => {
+    document.querySelectorAll('.pill').forEach(x=>x.classList.remove('active'));
+    p.classList.add('active');
+    const f = p.dataset.filter;
+    renderList(f);
+    markerLayer.clearLayers();
+    locations.forEach((l,i) => { if(f==='all'||l.type===f) markerLayer.addLayer(markers[i]); });
+  };
+});
+
+// ─── LAYER TOGGLES ───
+function bindToggle(id, layer) {
+  document.getElementById(id).onclick = function() {
+    this.classList.toggle('on');
+    this.classList.contains('on') ? map.addLayer(layer) : map.removeLayer(layer);
+  };
+}
+bindToggle('toggleRecycleHeat', recycleHeatLayer);
+bindToggle('toggleWasteHeat', wasteHeatLayer);
+
+document.getElementById('toggleDistricts').onclick = function() {
+  this.classList.toggle('on');
+  if(this.classList.contains('on')) {
+    map.addLayer(districtLayer);
+    map.addLayer(wasteMarkerLayer);
+  } else {
+    map.removeLayer(districtLayer);
+    map.removeLayer(wasteMarkerLayer);
+  }
+};
+
+renderList();
+</script>
+</body>
+</html>
